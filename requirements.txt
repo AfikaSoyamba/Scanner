@@ -2,3 +2,5 @@ streamlit
 pillow
 pytesseract
 opencv-python-headless
+speechrecognition
+pyaudio
