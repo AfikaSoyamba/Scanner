@@ -4,4 +4,3 @@ pytesseract
 opencv-python-headless
 shutil
 numpy
-opencv-python
