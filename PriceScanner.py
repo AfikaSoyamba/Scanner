@@ -4,8 +4,10 @@ import pytesseract
 import re
 import os
 import shutil
+import cv2
+import numpy as np
 
-# ✅ Automatically detect Tesseract path across different environments
+# ✅ Automatically detect Tesseract path
 def get_tesseract_path():
     if os.name == "nt":  # Windows
         paths = [
@@ -24,11 +26,11 @@ def get_tesseract_path():
 # ✅ Set the detected Tesseract path
 tesseract_path = get_tesseract_path()
 if tesseract_path:
-    pytesseract.pytesseract.tesseract_cmd = tesseract_path
+    pytesseract.pytesseract_cmd = tesseract_path
 else:
     raise FileNotFoundError("❌ Tesseract OCR not found! Install it and add it to PATH.")
 
-# ✅ Initialize session state for total price, scanned items, and image
+# ✅ Initialize session state
 if 'total_price' not in st.session_state:
     st.session_state.total_price = 0.0
 if 'scanned_items' not in st.session_state:
@@ -38,40 +40,33 @@ if 'pending_price' not in st.session_state:
 if 'last_image' not in st.session_state:
     st.session_state.last_image = None
 
-# 🟢 Apply custom styles
-st.markdown(
-    """
-    <style>
-        .stButton>button { width: 100%; font-size: 20px; padding: 10px; }
-        .price-card { background: white; padding: 10px; border-radius: 10px; box-shadow: 2px 2px 10px rgba(0,0,0,0.1); margin-bottom: 10px; }
-        .total-box { font-size: 24px; font-weight: bold; color: #2c3e50; }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
-# 📌 HEADER
-st.markdown("<h1 style='text-align: center; color: #007BFF;'>🛒 SkenaMali</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; font-size: 18px; color: #555;'>Scan shelf prices and track your grocery total in Rands</p>", unsafe_allow_html=True)
+# 📢 **IMPORTANT: Instruct Users to Use the Back Camera**
+st.warning("📢 **For best results, switch to the BACK camera and ensure good lighting.**")
 
 # 📸 SCAN PRICE LABEL
-st.markdown("<div style='text-align: center; font-size: 18px;'>📷 Take a picture of the price label</div>", unsafe_allow_html=True)
-img_file = st.camera_input("")
+st.markdown("<h3 style='color: #007BFF;'>📷 Take a picture of the price label</h3>", unsafe_allow_html=True)
+img_file = st.camera_input("Use your **BACK camera** for better accuracy.")
 
 if img_file is not None:
     image = Image.open(img_file)
-    st.session_state.last_image = image
 
-    # ✅ Image Preprocessing for Better OCR
+    # ✅ IMAGE PREPROCESSING FOR BETTER OCR ACCURACY
     def preprocess_image(img):
         img = img.convert("L")  # Convert to grayscale
         img = img.filter(ImageFilter.SHARPEN)  # Sharpen text
-        img = ImageEnhance.Contrast(img).enhance(2)  # Increase contrast
+        img = ImageEnhance.Contrast(img).enhance(3)  # Increase contrast
+        img = ImageEnhance.Brightness(img).enhance(1.2)  # Adjust brightness
         return img
 
     image = preprocess_image(image)
 
-    # Extract text using Tesseract OCR with optimized settings
+    # ✅ Use OpenCV to remove noise & improve edge detection
+    img_cv = np.array(image)
+    img_cv = cv2.GaussianBlur(img_cv, (3, 3), 0)
+    img_cv = cv2.adaptiveThreshold(img_cv, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+    image = Image.fromarray(img_cv)
+
+    # Extract text using Tesseract OCR with improved settings
     custom_config = "--psm 6 -c tessedit_char_whitelist=0123456789.Rr"
     recognized_text = pytesseract.image_to_string(image, config=custom_config)
 
@@ -81,7 +76,7 @@ if img_file is not None:
     # ✅ Extract price with "R" before the number
     match = re.search(r'R\s?(\d{1,4}(\.\d{1,2})?)', recognized_text)
 
-    # ✅ Extract product name (assume first line before price)
+    # ✅ Extract product name (first line before price)
     lines = recognized_text.split("\n")
     product_name = ""
     for line in lines:
@@ -104,7 +99,7 @@ if img_file is not None:
         st.session_state.pending_product = None
         st.warning("⚠️ No valid price detected. Please enter it manually.")
 
-    # ✅ Clear the last image after processing
+    # ✅ Clear the last image immediately after processing
     st.session_state.last_image = None
 
 # 📌 CONFIRM OR EDIT PRICE & PRODUCT
