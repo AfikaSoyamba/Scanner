@@ -3,21 +3,35 @@ from PIL import Image
 import pytesseract
 import re
 import os
+import shutil
 
-# Ensure Tesseract is installed and set the correct path if needed
-if os.name == "nt":  # Windows
-    pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+# ✅ Automatically detect Tesseract path for all OS
+def get_tesseract_path():
+    if os.name == "nt":  # Windows
+        default_path = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+        if os.path.exists(default_path):
+            return default_path
+    elif shutil.which("tesseract"):  # Linux/macOS/Streamlit Cloud
+        return shutil.which("tesseract")
+    return None
 
-# Initialize session state for total price and scanned items
+# ✅ Set Tesseract path dynamically
+tesseract_path = get_tesseract_path()
+if tesseract_path:
+    pytesseract.pytesseract.tesseract_cmd = tesseract_path
+else:
+    raise FileNotFoundError("❌ Tesseract OCR not found! Install it and try again.")
+
+st.title("🛒 **SkenaMali** – Scan Shelf Prices!")
+st.markdown("Scan price labels and track your grocery cost in **Rand (R)** before checkout.")
+
+# ✅ Initialize session state for total price and scanned items
 if 'total_price' not in st.session_state:
     st.session_state.total_price = 0.0
 if 'scanned_items' not in st.session_state:
     st.session_state.scanned_items = []
 if 'pending_price' not in st.session_state:
     st.session_state.pending_price = None  # Holds price before user confirms
-
-st.title("🛒 **SkenaMali** – Scan Shelf Prices!")
-st.markdown("Scan price labels and track your grocery cost in **Rand (R)** before checkout.")
 
 # 📸 SCAN PRICE LABEL
 img_file = st.camera_input("📷 Take a picture of the price label")
@@ -71,4 +85,3 @@ if st.session_state.scanned_items:
     st.write("🛍️ **Scanned Items:**")
     for item in st.session_state.scanned_items:
         st.write(f"- {item}")
-
