@@ -15,12 +15,6 @@ def get_tesseract_path():
         return shutil.which("tesseract")
     return None
 
-# ✅ Set Tesseract path dynamically
-tesseract_path = get_tesseract_path()
-if tesseract_path:
-    pytesseract.pytesseract.tesseract_cmd = tesseract_path
-else:
-    raise FileNotFoundError("❌ Tesseract OCR not found! Install it and try again.")
 
 st.title("🛒 **SkenaMali** – Scan Shelf Prices!")
 st.markdown("Scan price labels and track your grocery cost in **Rand (R)** before checkout.")
