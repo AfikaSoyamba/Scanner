@@ -1,5 +1,5 @@
 import streamlit as st
-from PIL import Image
+from PIL import Image, ImageEnhance, ImageFilter
 import pytesseract
 import re
 import os
@@ -42,47 +42,52 @@ if 'last_image' not in st.session_state:
 st.markdown(
     """
     <style>
-        body { background-color: #f8f9fa; }
         .stButton>button { width: 100%; font-size: 20px; padding: 10px; }
-        .stTextInput>div>div>input { font-size: 18px; text-align: center; }
-        .price-card { background: white; padding: 10px; border-radius: 10px; box-shadow: 2px 2px 10px rgba(0,0,0,0.1); }
+        .price-card { background: white; padding: 10px; border-radius: 10px; box-shadow: 2px 2px 10px rgba(0,0,0,0.1); margin-bottom: 10px; }
         .total-box { font-size: 24px; font-weight: bold; color: #2c3e50; }
-        .scan-box { text-align: center; padding: 20px; border-radius: 10px; background: #007BFF; color: white; font-size: 20px; }
-        .scan-box:hover { background: #0056b3; }
     </style>
     """,
     unsafe_allow_html=True
 )
 
-# 📌 HEADER DESIGN
+# 📌 HEADER
 st.markdown("<h1 style='text-align: center; color: #007BFF;'>🛒 SkenaMali</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; font-size: 18px; color: #555;'>Scan shelf prices and track your grocery total in Rands</p>", unsafe_allow_html=True)
 
 # 📸 SCAN PRICE LABEL
-st.markdown("<div class='scan-box'>📷 Take a picture of the price label</div>", unsafe_allow_html=True)
+st.markdown("<div style='text-align: center; font-size: 18px;'>📷 Take a picture of the price label</div>", unsafe_allow_html=True)
 img_file = st.camera_input("")
 
 if img_file is not None:
-    # Open and display the captured image (temporarily)
     image = Image.open(img_file)
-    st.session_state.last_image = image  # Save the last image for clarity
-    st.image(image, caption="📸 Scanned Image", use_container_width=True)
+    st.session_state.last_image = image
 
-    # Extract text using Tesseract OCR
-    recognized_text = pytesseract.image_to_string(image)
-    st.markdown("<h3 style='color: #007BFF;'>📝 Recognized Text</h3>", unsafe_allow_html=True)
+    # ✅ Image Preprocessing for Better OCR
+    def preprocess_image(img):
+        img = img.convert("L")  # Convert to grayscale
+        img = img.filter(ImageFilter.SHARPEN)  # Sharpen text
+        img = ImageEnhance.Contrast(img).enhance(2)  # Increase contrast
+        return img
+
+    image = preprocess_image(image)
+
+    # Extract text using Tesseract OCR with optimized settings
+    custom_config = "--psm 6 -c tessedit_char_whitelist=0123456789.Rr"
+    recognized_text = pytesseract.image_to_string(image, config=custom_config)
+
+    st.subheader("📝 Recognized Text")
     st.text(recognized_text)
 
-    # ✅ Extract price in Rand (Rxx.xx format)
+    # ✅ Extract price with "R" before the number
     match = re.search(r'R\s?(\d{1,4}(\.\d{1,2})?)', recognized_text)
 
-    # ✅ Extract product name (Assume first non-price text is product)
+    # ✅ Extract product name (assume first line before price)
     lines = recognized_text.split("\n")
     product_name = ""
     for line in lines:
-        if not re.search(r'R\s?(\d{1,4}(\.\d{1,2})?)', line) and len(line.strip()) > 2:
+        if "R" not in line and len(line.strip()) > 2:
             product_name = line.strip()
-            break  # Stop after finding the first valid product name
+            break
 
     if match:
         price_str = match.group(1)
@@ -105,7 +110,7 @@ if img_file is not None:
 # 📌 CONFIRM OR EDIT PRICE & PRODUCT
 if st.session_state.pending_price is not None:
     st.markdown("<h3 style='color: #007BFF;'>🔍 Review & Confirm Product & Price</h3>", unsafe_allow_html=True)
-    
+
     product_name_input = st.text_input("Product Name:", value=st.session_state.pending_product)
     corrected_price = st.number_input("Confirm or edit detected price:", min_value=0.00, format="%.2f", value=st.session_state.pending_price)
 
