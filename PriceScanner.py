@@ -7,8 +7,14 @@ import shutil
 import cv2
 import numpy as np
 
-# ✅ Automatically detect Tesseract path
+# ============================
+# ✅ Helper Functions
+# ============================
+
 def get_tesseract_path():
+    """
+    Automatically detect and return the Tesseract path based on the operating system.
+    """
     if os.name == "nt":  # Windows
         paths = [
             r"C:\Program Files\Tesseract-OCR\tesseract.exe",
@@ -17,97 +23,103 @@ def get_tesseract_path():
         for path in paths:
             if os.path.exists(path):
                 return path
-    elif os.path.exists("/usr/bin/tesseract"):  # ✅ Streamlit Cloud/Linux
+    elif os.path.exists("/usr/bin/tesseract"):  # Linux
         return "/usr/bin/tesseract"
     elif shutil.which("tesseract"):  # macOS/Linux Auto-Detection
         return shutil.which("tesseract")
     return None
 
-# ✅ Set the detected Tesseract path
-tesseract_path = get_tesseract_path()
-if tesseract_path:
-    pytesseract.pytesseract_cmd = tesseract_path
-else:
-    raise FileNotFoundError("❌ Tesseract OCR not found! Install it and add it to PATH.")
 
-# ✅ Initialize session state
+def preprocess_image(img):
+    """
+    Preprocess the image to improve OCR accuracy.
+    Steps: Convert to grayscale, sharpen, enhance contrast/brightness, and apply noise reduction.
+    """
+    img = img.convert("L")  # Convert to grayscale
+    img = img.filter(ImageFilter.SHARPEN)  # Sharpen text
+    img = ImageEnhance.Contrast(img).enhance(2.5)  # Increase contrast
+    img = ImageEnhance.Brightness(img).enhance(1.2)  # Adjust brightness
+
+    # Use OpenCV for noise reduction and thresholding
+    img_cv = np.array(img)
+    img_cv = cv2.GaussianBlur(img_cv, (5, 5), 0)
+    img_cv = cv2.adaptiveThreshold(img_cv, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+    return Image.fromarray(img_cv)
+
+
+def extract_price_and_product(text):
+    """
+    Extract product name and price from OCR text using regex.
+    """
+    # Regex to match prices with 'R' prefix
+    price_match = re.search(r'R\s?(\d{1,4}(\.\d{1,2})?)', text)
+    price = float(price_match.group(1)) if price_match else None
+
+    # Extract product name (first line before price)
+    lines = text.split("\n")
+    product_name = next((line.strip() for line in lines if "R" not in line and len(line.strip()) > 2), "")
+
+    return product_name, price
+
+
+# ============================
+# ✅ Initialize Session State
+# ============================
+
 if 'total_price' not in st.session_state:
     st.session_state.total_price = 0.0
 if 'scanned_items' not in st.session_state:
     st.session_state.scanned_items = []
 if 'pending_price' not in st.session_state:
     st.session_state.pending_price = None
-if 'last_image' not in st.session_state:
-    st.session_state.last_image = None
+if 'pending_product' not in st.session_state:
+    st.session_state.pending_product = None
 
-# 📢 **IMPORTANT: Instruct Users to Use the Back Camera**
-st.warning("📢 **For best results, switch to the BACK camera and ensure good lighting.**")
+# ============================
+# ✅ Main App Logic
+# ============================
+
+st.title("🛒 Price Scanner App")
+
+# 📢 Instruct users to use the back camera
+st.warning("📢 **For best results, use the BACK camera and ensure good lighting.**")
 
 # 📸 SCAN PRICE LABEL
 st.markdown("<h3 style='color: #007BFF;'>📷 Take a picture of the price label</h3>", unsafe_allow_html=True)
 img_file = st.camera_input("Use your **BACK camera** for better accuracy.")
 
 if img_file is not None:
-    image = Image.open(img_file)
+    try:
+        # Load and preprocess the image
+        image = Image.open(img_file)
+        preprocessed_image = preprocess_image(image)
 
-    # ✅ IMAGE PREPROCESSING FOR BETTER OCR ACCURACY
-    def preprocess_image(img):
-        img = img.convert("L")  # Convert to grayscale
-        img = img.filter(ImageFilter.SHARPEN)  # Sharpen text
-        img = ImageEnhance.Contrast(img).enhance(3)  # Increase contrast
-        img = ImageEnhance.Brightness(img).enhance(1.2)  # Adjust brightness
-        return img
+        # Extract text using Tesseract OCR
+        custom_config = "--psm 8 -c tessedit_char_whitelist=0123456789.Rr"
+        recognized_text = pytesseract.image_to_string(preprocessed_image, config=custom_config)
 
-    image = preprocess_image(image)
+        st.subheader("📝 Recognized Text")
+        st.text(recognized_text)
 
-    # ✅ Use OpenCV to remove noise & improve edge detection
-    img_cv = np.array(image)
-    img_cv = cv2.GaussianBlur(img_cv, (3, 3), 0)
-    img_cv = cv2.adaptiveThreshold(img_cv, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
-    image = Image.fromarray(img_cv)
+        # Extract product name and price
+        product_name, price = extract_price_and_product(recognized_text)
 
-    # Extract text using Tesseract OCR with improved settings
-    custom_config = "--psm 6 -c tessedit_char_whitelist=0123456789.Rr"
-    recognized_text = pytesseract.image_to_string(image, config=custom_config)
-
-    st.subheader("📝 Recognized Text")
-    st.text(recognized_text)
-
-    # ✅ Extract price with "R" before the number
-    match = re.search(r'R\s?(\d{1,4}(\.\d{1,2})?)', recognized_text)
-
-    # ✅ Extract product name (first line before price)
-    lines = recognized_text.split("\n")
-    product_name = ""
-    for line in lines:
-        if "R" not in line and len(line.strip()) > 2:
-            product_name = line.strip()
-            break
-
-    if match:
-        price_str = match.group(1)
-        try:
-            price = float(price_str)
+        if price is not None:
             st.session_state.pending_price = price
             st.session_state.pending_product = product_name
-        except ValueError:
-            st.session_state.pending_price = None
-            st.session_state.pending_product = None
-            st.error("⚠️ Error converting text to a number.")
-    else:
-        st.session_state.pending_price = None
-        st.session_state.pending_product = None
-        st.warning("⚠️ No valid price detected. Please enter it manually.")
-
-    # ✅ Clear the last image immediately after processing
-    st.session_state.last_image = None
+        else:
+            st.warning("⚠️ No valid price detected. Please enter it manually.")
+    except Exception as e:
+        st.error(f"❌ An error occurred while processing the image: {e}")
 
 # 📌 CONFIRM OR EDIT PRICE & PRODUCT
 if st.session_state.pending_price is not None:
     st.markdown("<h3 style='color: #007BFF;'>🔍 Review & Confirm Product & Price</h3>", unsafe_allow_html=True)
 
     product_name_input = st.text_input("Product Name:", value=st.session_state.pending_product)
-    corrected_price = st.number_input("Confirm or edit detected price:", min_value=0.00, format="%.2f", value=st.session_state.pending_price)
+    corrected_price = st.number_input(
+        "Confirm or edit detected price:", min_value=0.00, format="%.2f", value=st.session_state.pending_price
+    )
 
     if st.button("✅ Add to List"):
         st.session_state.total_price += corrected_price
@@ -125,3 +137,37 @@ if st.session_state.scanned_items:
     st.markdown("<h3 style='color: #007BFF;'>🛍️ Scanned Items</h3>", unsafe_allow_html=True)
     for item in st.session_state.scanned_items:
         st.markdown(f"<div class='price-card'>✅ {item}</div>", unsafe_allow_html=True)
+
+# 🗑️ CLEAR ALL BUTTON
+if st.button("🗑️ Clear All"):
+    st.session_state.total_price = 0.0
+    st.session_state.scanned_items.clear()
+    st.session_state.pending_price = None
+    st.session_state.pending_product = None
+    st.success("✅ Cleared all scanned items and reset total price.")
+
+# ============================
+# ✅ Styling with CSS
+# ============================
+
+st.markdown("""
+<style>
+.total-box {
+    font-size: 24px;
+    font-weight: bold;
+    color: #007BFF;
+    padding: 10px;
+    border-radius: 5px;
+    background-color: #f0f8ff;
+    text-align: center;
+}
+.price-card {
+    font-size: 18px;
+    color: #333;
+    padding: 5px 10px;
+    margin: 5px 0;
+    border-left: 5px solid #007BFF;
+    background-color: #f9f9f9;
+}
+</style>
+""", unsafe_allow_html=True)
