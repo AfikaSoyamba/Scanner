@@ -74,6 +74,22 @@ def extract_price_and_product(text):
     return product_name, price
 
 
+def crop_to_safe_area(image, safe_area_ratio=0.6):
+    """
+    Crop the image to a central "safe area" defined by a ratio of the original image size.
+    """
+    width, height = image.size
+    safe_width = int(width * safe_area_ratio)
+    safe_height = int(height * safe_area_ratio)
+    
+    left = (width - safe_width) // 2
+    top = (height - safe_height) // 2
+    right = left + safe_width
+    bottom = top + safe_height
+    
+    return image.crop((left, top, right, bottom))
+
+
 # ============================
 # ✅ Initialize Session State
 # ============================
@@ -93,8 +109,13 @@ if 'pending_product' not in st.session_state:
 
 st.title("🛒 Price Scanner App")
 
-# 📢 Instruct users to use the back camera
-st.warning("📢 **For best results, use the BACK camera and ensure good lighting.**")
+# 📢 Instruct users to use the back camera and position the label in the safe area
+st.warning("📢 **For best results:**")
+st.markdown("""
+- Use the BACK camera.
+- Position the price label within the **SAFE AREA** (centered rectangle).
+- Ensure good lighting and avoid shadows.
+""")
 
 # 📸 SCAN PRICE LABEL
 st.markdown("<h3 style='color: #007BFF;'>📷 Take a picture of the price label</h3>", unsafe_allow_html=True)
@@ -102,13 +123,23 @@ img_file = st.camera_input("Use your **BACK camera** for better accuracy.")
 
 if img_file is not None:
     try:
-        # Load and preprocess the image
+        # Load the image
         image = Image.open(img_file)
-        preprocessed_image = preprocess_image(image)
 
-        # Display preprocessed image for debugging
-        st.subheader("🖼️ Preprocessed Image")
-        st.image(preprocessed_image, caption="Preprocessed Image", use_column_width=True)
+        # Display the full image for debugging
+        st.subheader("🖼️ Full Captured Image")
+        st.image(image, caption="Full Captured Image", use_column_width=True)
+
+        # Crop the image to the safe area
+        safe_area_ratio = 0.6  # Safe area covers 60% of the image
+        cropped_image = crop_to_safe_area(image, safe_area_ratio)
+
+        # Display the cropped image
+        st.subheader("🖼️ Cropped Image (Safe Area)")
+        st.image(cropped_image, caption="Cropped Image (Safe Area)", use_column_width=True)
+
+        # Preprocess the cropped image
+        preprocessed_image = preprocess_image(cropped_image)
 
         # Extract text using Tesseract OCR
         custom_config = "--psm 6"
@@ -118,7 +149,7 @@ if img_file is not None:
         st.text(recognized_text)
 
         if not recognized_text.strip():
-            st.warning("⚠️ No text detected. Please try again with better lighting or a clearer image.")
+            st.warning("⚠️ No text detected. Please try again with better positioning or lighting.")
         else:
             # Extract product name and price
             product_name, price = extract_price_and_product(recognized_text)
