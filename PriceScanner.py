@@ -30,9 +30,9 @@ def get_tesseract_path():
     return None
 
 
-def preprocess_image(img):
+def preprocess_image_for_numbers(img):
     """
-    Preprocess the image to improve OCR accuracy.
+    Preprocess the image specifically for numeric text recognition.
     """
     # Convert to grayscale
     img = img.convert("L")
@@ -42,9 +42,9 @@ def preprocess_image(img):
     
     # Sharpen and enhance contrast/brightness
     img = img.filter(ImageFilter.SHARPEN)
-    img = ImageEnhance.Contrast(img).enhance(2.5)
-    img = ImageEnhance.Brightness(img).enhance(1.2)
-
+    img = ImageEnhance.Contrast(img).enhance(3.0)  # Stronger contrast for numbers
+    img = ImageEnhance.Brightness(img).enhance(1.5)  # Brighten the image
+    
     # Convert to OpenCV format
     img_cv = np.array(img)
     
@@ -59,19 +59,20 @@ def preprocess_image(img):
     return Image.fromarray(img_cv)
 
 
-def extract_price_and_product(text):
+def extract_numbers(text):
     """
-    Extract product name and price from OCR text using regex.
+    Extract numeric values from OCR text using regex.
+    Handles formats like "R 123.45", "1,234.56", or "123".
     """
-    # Regex to match prices with 'R' prefix (handles commas)
-    price_match = re.search(r'R\s?([\d,]+(\.\d{1,2})?)', text)
-    price = float(price_match.group(1).replace(",", "")) if price_match else None
-
-    # Extract product name (first line before price)
-    lines = text.split("\n")
-    product_name = next((line.strip() for line in lines if "R" not in line and len(line.strip()) > 2), "")
-
-    return product_name, price
+    # Regex to match prices with optional 'R' prefix and commas
+    number_match = re.search(r'R?\s?([\d,]+(\.\d{1,2})?)', text)
+    if number_match:
+        number_str = number_match.group(1).replace(",", "")  # Remove commas
+        try:
+            return float(number_str)
+        except ValueError:
+            return None
+    return None
 
 
 def crop_to_safe_area(image, safe_area_ratio=0.6):
@@ -138,11 +139,11 @@ if img_file is not None:
         st.subheader("🖼️ Cropped Image (Safe Area)")
         st.image(cropped_image, caption="Cropped Image (Safe Area)", use_column_width=True)
 
-        # Preprocess the cropped image
-        preprocessed_image = preprocess_image(cropped_image)
+        # Preprocess the cropped image for numeric recognition
+        preprocessed_image = preprocess_image_for_numbers(cropped_image)
 
-        # Extract text using Tesseract OCR
-        custom_config = "--psm 6"
+        # Extract text using Tesseract OCR (optimized for numbers)
+        custom_config = "--psm 6 -c tessedit_char_whitelist=0123456789.Rr,"
         recognized_text = pytesseract.image_to_string(preprocessed_image, config=custom_config)
 
         st.subheader("📝 Recognized Text")
@@ -151,12 +152,12 @@ if img_file is not None:
         if not recognized_text.strip():
             st.warning("⚠️ No text detected. Please try again with better positioning or lighting.")
         else:
-            # Extract product name and price
-            product_name, price = extract_price_and_product(recognized_text)
+            # Extract numeric value (price)
+            price = extract_numbers(recognized_text)
 
             if price is not None:
                 st.session_state.pending_price = price
-                st.session_state.pending_product = product_name
+                st.success(f"✅ Detected price: R{price:.2f}")
             else:
                 st.warning("⚠️ No valid price detected. Please enter it manually.")
     except Exception as e:
