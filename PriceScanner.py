@@ -33,17 +33,29 @@ def get_tesseract_path():
 def preprocess_image(img):
     """
     Preprocess the image to improve OCR accuracy.
-    Steps: Convert to grayscale, sharpen, enhance contrast/brightness, and apply noise reduction.
     """
-    img = img.convert("L")  # Convert to grayscale
-    img = img.filter(ImageFilter.SHARPEN)  # Sharpen text
-    img = ImageEnhance.Contrast(img).enhance(2.5)  # Increase contrast
-    img = ImageEnhance.Brightness(img).enhance(1.2)  # Adjust brightness
+    # Convert to grayscale
+    img = img.convert("L")
+    
+    # Resize for consistency (optional)
+    img = img.resize((1280, 720))
+    
+    # Sharpen and enhance contrast/brightness
+    img = img.filter(ImageFilter.SHARPEN)
+    img = ImageEnhance.Contrast(img).enhance(2.5)
+    img = ImageEnhance.Brightness(img).enhance(1.2)
 
-    # Use OpenCV for noise reduction and thresholding
+    # Convert to OpenCV format
     img_cv = np.array(img)
+    
+    # Apply Gaussian blur and adaptive thresholding
     img_cv = cv2.GaussianBlur(img_cv, (5, 5), 0)
     img_cv = cv2.adaptiveThreshold(img_cv, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+    
+    # Morphological operations to clean up noise
+    kernel = np.ones((3, 3), np.uint8)
+    img_cv = cv2.morphologyEx(img_cv, cv2.MORPH_CLOSE, kernel)
+    
     return Image.fromarray(img_cv)
 
 
@@ -51,9 +63,9 @@ def extract_price_and_product(text):
     """
     Extract product name and price from OCR text using regex.
     """
-    # Regex to match prices with 'R' prefix
-    price_match = re.search(r'R\s?(\d{1,4}(\.\d{1,2})?)', text)
-    price = float(price_match.group(1)) if price_match else None
+    # Regex to match prices with 'R' prefix (handles commas)
+    price_match = re.search(r'R\s?([\d,]+(\.\d{1,2})?)', text)
+    price = float(price_match.group(1).replace(",", "")) if price_match else None
 
     # Extract product name (first line before price)
     lines = text.split("\n")
@@ -94,21 +106,28 @@ if img_file is not None:
         image = Image.open(img_file)
         preprocessed_image = preprocess_image(image)
 
+        # Display preprocessed image for debugging
+        st.subheader("🖼️ Preprocessed Image")
+        st.image(preprocessed_image, caption="Preprocessed Image", use_column_width=True)
+
         # Extract text using Tesseract OCR
-        custom_config = "--psm 8 -c tessedit_char_whitelist=0123456789.Rr"
+        custom_config = "--psm 6"
         recognized_text = pytesseract.image_to_string(preprocessed_image, config=custom_config)
 
         st.subheader("📝 Recognized Text")
         st.text(recognized_text)
 
-        # Extract product name and price
-        product_name, price = extract_price_and_product(recognized_text)
-
-        if price is not None:
-            st.session_state.pending_price = price
-            st.session_state.pending_product = product_name
+        if not recognized_text.strip():
+            st.warning("⚠️ No text detected. Please try again with better lighting or a clearer image.")
         else:
-            st.warning("⚠️ No valid price detected. Please enter it manually.")
+            # Extract product name and price
+            product_name, price = extract_price_and_product(recognized_text)
+
+            if price is not None:
+                st.session_state.pending_price = price
+                st.session_state.pending_product = product_name
+            else:
+                st.warning("⚠️ No valid price detected. Please enter it manually.")
     except Exception as e:
         st.error(f"❌ An error occurred while processing the image: {e}")
 
