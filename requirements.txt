@@ -2,4 +2,6 @@ streamlit
 pillow
 pytesseract
 opencv-python-headless
-pytest-shutil
+shutil
+numpy
+opencv-python
