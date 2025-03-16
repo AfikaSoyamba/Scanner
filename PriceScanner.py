@@ -25,70 +25,103 @@ def get_tesseract_path():
 tesseract_path = get_tesseract_path()
 if tesseract_path:
     pytesseract.pytesseract.tesseract_cmd = tesseract_path
-    print(f"✅ Tesseract path set: {tesseract_path}")
 else:
     raise FileNotFoundError("❌ Tesseract OCR not found! Install it and add it to PATH.")
 
-# ✅ Initialize session state for total price and scanned items
+# ✅ Initialize session state for total price, scanned items, and image
 if 'total_price' not in st.session_state:
     st.session_state.total_price = 0.0
 if 'scanned_items' not in st.session_state:
     st.session_state.scanned_items = []
 if 'pending_price' not in st.session_state:
-    st.session_state.pending_price = None  # Holds price before user confirms
+    st.session_state.pending_price = None
+if 'last_image' not in st.session_state:
+    st.session_state.last_image = None
 
-st.title("🛒 **SkenaMali** – Scan Shelf Prices!")
-st.markdown("Scan price labels and track your grocery cost in **Rand (R)** before checkout.")
+# 🟢 Apply custom styles
+st.markdown(
+    """
+    <style>
+        body { background-color: #f8f9fa; }
+        .stButton>button { width: 100%; font-size: 20px; padding: 10px; }
+        .stTextInput>div>div>input { font-size: 18px; text-align: center; }
+        .price-card { background: white; padding: 10px; border-radius: 10px; box-shadow: 2px 2px 10px rgba(0,0,0,0.1); }
+        .total-box { font-size: 24px; font-weight: bold; color: #2c3e50; }
+        .scan-box { text-align: center; padding: 20px; border-radius: 10px; background: #007BFF; color: white; font-size: 20px; }
+        .scan-box:hover { background: #0056b3; }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+# 📌 HEADER DESIGN
+st.markdown("<h1 style='text-align: center; color: #007BFF;'>🛒 SkenaMali</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; font-size: 18px; color: #555;'>Scan shelf prices and track your grocery total in Rands</p>", unsafe_allow_html=True)
 
 # 📸 SCAN PRICE LABEL
-img_file = st.camera_input("📷 Take a picture of the price label")
+st.markdown("<div class='scan-box'>📷 Take a picture of the price label</div>", unsafe_allow_html=True)
+img_file = st.camera_input("")
 
 if img_file is not None:
-    # Open and display the captured image
+    # Open and display the captured image (temporarily)
     image = Image.open(img_file)
-    st.image(image, caption="📸 Captured Image", use_container_width=True)
+    st.session_state.last_image = image  # Save the last image for clarity
+    st.image(image, caption="📸 Scanned Image", use_container_width=True)
 
     # Extract text using Tesseract OCR
     recognized_text = pytesseract.image_to_string(image)
-    st.subheader("📝 Recognized Text:")
+    st.markdown("<h3 style='color: #007BFF;'>📝 Recognized Text</h3>", unsafe_allow_html=True)
     st.text(recognized_text)
 
-    # Use regex to extract price values (R99.99, 99.99, etc.)
-    match = re.search(r'R?\s?(\d{1,4}(\.\d{1,2})?)', recognized_text)
+    # ✅ Extract price in Rand (Rxx.xx format)
+    match = re.search(r'R\s?(\d{1,4}(\.\d{1,2})?)', recognized_text)
+
+    # ✅ Extract product name (Assume first non-price text is product)
+    lines = recognized_text.split("\n")
+    product_name = ""
+    for line in lines:
+        if not re.search(r'R\s?(\d{1,4}(\.\d{1,2})?)', line) and len(line.strip()) > 2:
+            product_name = line.strip()
+            break  # Stop after finding the first valid product name
 
     if match:
-        price_str = match.group(1)  # Extract only the numeric value
+        price_str = match.group(1)
         try:
             price = float(price_str)
-            st.session_state.pending_price = price  # Store extracted price for user confirmation
+            st.session_state.pending_price = price
+            st.session_state.pending_product = product_name
         except ValueError:
             st.session_state.pending_price = None
-            st.error("⚠️ Error converting the recognized text to a valid number.")
+            st.session_state.pending_product = None
+            st.error("⚠️ Error converting text to a number.")
     else:
         st.session_state.pending_price = None
+        st.session_state.pending_product = None
         st.warning("⚠️ No valid price detected. Please enter it manually.")
 
-# 📌 CONFIRM OR EDIT PRICE
+    # ✅ Clear the last image after processing
+    st.session_state.last_image = None
+
+# 📌 CONFIRM OR EDIT PRICE & PRODUCT
 if st.session_state.pending_price is not None:
-    st.markdown("## 🔍 Review & Confirm Price")
-    corrected_price = st.number_input(
-        "Confirm or edit the detected price:", 
-        min_value=0.00, 
-        format="%.2f", 
-        value=st.session_state.pending_price
-    )
+    st.markdown("<h3 style='color: #007BFF;'>🔍 Review & Confirm Product & Price</h3>", unsafe_allow_html=True)
     
-    if st.button("✅ Add to Total"):
+    product_name_input = st.text_input("Product Name:", value=st.session_state.pending_product)
+    corrected_price = st.number_input("Confirm or edit detected price:", min_value=0.00, format="%.2f", value=st.session_state.pending_price)
+
+    if st.button("✅ Add to List"):
         st.session_state.total_price += corrected_price
-        st.session_state.scanned_items.append(f"R{corrected_price:.2f}")
-        st.success(f"✅ Price **R{corrected_price:.2f}** added to your total.")
-        st.session_state.pending_price = None  # Clear pending price after confirmation
+        st.session_state.scanned_items.append(f"{product_name_input} - R{corrected_price:.2f}")
+        st.success(f"✅ Added: **{product_name_input}** for **R{corrected_price:.2f}**")
+        st.session_state.pending_price = None
+        st.session_state.pending_product = None
 
 # 🏷️ DISPLAY TOTAL PRICE
-st.markdown("## 🏷️ **Running Total**")
-st.write(f"**Total Price:** **R{st.session_state.total_price:.2f}**")
+st.markdown("<h3 style='color: #007BFF;'>🏷️ Total</h3>", unsafe_allow_html=True)
+st.markdown(f"<div class='total-box'>Total: R{st.session_state.total_price:.2f}</div>", unsafe_allow_html=True)
 
+# 📌 LIST OF SCANNED ITEMS
 if st.session_state.scanned_items:
-    st.write("🛍️ **Scanned Items:**")
+    st.markdown("<h3 style='color: #007BFF;'>🛍️ Scanned Items</h3>", unsafe_allow_html=True)
     for item in st.session_state.scanned_items:
-        st.write(f"- {item}")
+        st.markdown(f"<div class='price-card'>✅ {item}</div>", unsafe_allow_html=True)
