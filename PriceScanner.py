@@ -5,19 +5,29 @@ import re
 import os
 import shutil
 
-# ✅ Automatically detect Tesseract path for all OS
+# ✅ Automatically detect Tesseract path across different environments
 def get_tesseract_path():
     if os.name == "nt":  # Windows
-        default_path = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-        if os.path.exists(default_path):
-            return default_path
-    elif shutil.which("tesseract"):  # Linux/macOS/Streamlit Cloud
+        paths = [
+            r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+            r"C:\Users\USERNAME\AppData\Local\Tesseract-OCR\tesseract.exe"
+        ]
+        for path in paths:
+            if os.path.exists(path):
+                return path
+    elif os.path.exists("/usr/bin/tesseract"):  # ✅ Streamlit Cloud/Linux
+        return "/usr/bin/tesseract"
+    elif shutil.which("tesseract"):  # macOS/Linux Auto-Detection
         return shutil.which("tesseract")
     return None
 
-
-st.title("🛒 **SkenaMali** – Scan Shelf Prices!")
-st.markdown("Scan price labels and track your grocery cost in **Rand (R)** before checkout.")
+# ✅ Set the detected Tesseract path
+tesseract_path = get_tesseract_path()
+if tesseract_path:
+    pytesseract.pytesseract.tesseract_cmd = tesseract_path
+    print(f"✅ Tesseract path set: {tesseract_path}")
+else:
+    raise FileNotFoundError("❌ Tesseract OCR not found! Install it and add it to PATH.")
 
 # ✅ Initialize session state for total price and scanned items
 if 'total_price' not in st.session_state:
@@ -26,6 +36,9 @@ if 'scanned_items' not in st.session_state:
     st.session_state.scanned_items = []
 if 'pending_price' not in st.session_state:
     st.session_state.pending_price = None  # Holds price before user confirms
+
+st.title("🛒 **SkenaMali** – Scan Shelf Prices!")
+st.markdown("Scan price labels and track your grocery cost in **Rand (R)** before checkout.")
 
 # 📸 SCAN PRICE LABEL
 img_file = st.camera_input("📷 Take a picture of the price label")
