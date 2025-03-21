@@ -58,9 +58,9 @@ def get_product_info(barcode: str) -> Optional[dict]:
     return None
 
 def main():
-    st.title("Flashka - Price Scanner & Shopping List")
-
-    # Initialize session state variables if not already set
+    st.title("Flashka - Real Price Scanner & Shopping List")
+    
+    # Initialize session state
     for key in ["is_scanning", "is_scanning_barcode", "shopping_list", "loyalty_cards",
                 "is_add_manually_modal_visible", "new_item_name", "new_item_price", "scanned_item",
                 "is_add_confirmation_modal_visible", "is_fetching_product_info", "scanned_barcode",
@@ -232,8 +232,8 @@ def main():
             st.title("Welcome to Flashka!")
             st.write("Flashka helps you scan prices using OCR, manage your shopping list, and store loyalty cards.")
             st.subheader("Tutorial")
-            st.write("1. Scan Prices: Upload an image with a price tag to extract the price.")
-            st.write("2. Scan Barcode: Upload an image of a barcode to retrieve product info.")
+            st.write("1. Scan Prices: Capture an image of a price tag using your camera.")
+            st.write("2. Scan Barcode: Capture an image of a barcode to retrieve product information.")
             st.write("3. Manage your shopping list and loyalty cards.")
             if st.button("Close Tutorial"):
                 st.session_state.show_tutorial = False
@@ -254,11 +254,11 @@ def main():
             st.session_state.is_add_card_modal_visible = True
         render_loyalty_cards()
 
-    # --- File Uploaders for Real OCR and Barcode Scanning ---
+    # --- Camera Inputs for Real OCR and Barcode Scanning ---
     if st.session_state.is_scanning:
-        uploaded_ocr_file = st.file_uploader("Upload an image for OCR", type=["png", "jpg", "jpeg"], key="ocr_upload")
-        if uploaded_ocr_file is not None:
-            ocr_result = perform_ocr(uploaded_ocr_file)
+        camera_image = st.camera_input("Capture an image for OCR")
+        if camera_image is not None:
+            ocr_result = perform_ocr(camera_image)
             st.write("OCR Result:", ocr_result)
             price_match = re.search(r"(\d+[,.]\d{2})", ocr_result)
             if price_match:
@@ -277,13 +277,13 @@ def main():
                 except ValueError:
                     st.error("Invalid price format detected.")
             else:
-                st.error("No price found in scanned text.")
+                st.error("No price found in captured image.")
             st.session_state.is_scanning = False
 
     if st.session_state.is_scanning_barcode:
-        uploaded_barcode_file = st.file_uploader("Upload an image for Barcode scanning", type=["png", "jpg", "jpeg"], key="barcode_upload")
-        if uploaded_barcode_file is not None:
-            barcode_data = scan_barcode_from_image(uploaded_barcode_file)
+        barcode_image = st.camera_input("Capture an image for Barcode scanning")
+        if barcode_image is not None:
+            barcode_data = scan_barcode_from_image(barcode_image)
             if barcode_data:
                 st.write("Barcode detected:", barcode_data)
                 st.session_state.scanned_barcode = barcode_data
