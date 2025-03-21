@@ -1,228 +1,510 @@
 import streamlit as st
-from PIL import Image, ImageEnhance, ImageFilter
-import pytesseract
-import re
-import os
-import shutil
-import cv2
-import numpy as np
+import random
+import time
+from dataclasses import dataclass
+from typing import List, Optional
+import re  # Import the regular expression module
 
-# ============================
-# ✅ Helper Functions
-# ============================
 
-def get_tesseract_path():
-    """
-    Automatically detect and return the Tesseract path based on the operating system.
-    """
-    if os.name == "nt":  # Windows
-        paths = [
-            r"C:\Program Files\Tesseract-OCR\tesseract.exe",
-            r"C:\Users\USERNAME\AppData\Local\Tesseract-OCR\tesseract.exe"
+# Mock OCR and other functions for demonstration
+def mock_ocr(image_path: str) -> Optional[str]:
+    """Simulates OCR processing and returns extracted text."""
+    time.sleep(0.5)  # Simulate processing delay
+
+    # Mock OCR result based on a predefined image path
+    if image_path == 'mockImagePath1':
+        return 'Milk 2.50'
+    elif image_path == 'mockImagePath2':
+        return 'Bread 1.80'
+    elif image_path == 'mockImagePath3':
+        return 'Eggs 3.20'
+    elif image_path == 'mockImagePath4':
+        return 'Apple Juice 4.00'
+    elif image_path == 'mockImagePath5':
+        return 'Chicken Breast 12.50'
+    elif image_path == 'mockImagePath6':
+        return 'Pasta 1.20'
+    elif image_path == 'mockImagePath7':
+        return 'Rice 2.00'
+    elif image_path == 'mockImagePath8':
+        return 'Tomato Sauce 2.50'
+    elif image_path == 'mockImagePath9':
+        return 'Cheddar Cheese 6.00'
+    elif image_path == 'mockImagePath10':
+        return 'Ground Beef 8.00'
+    else:
+        # Return a random result for demonstration
+        products = [
+            'Milk 2.50',
+            'Bread 1.80',
+            'Eggs 3.20',
+            'Coffee 7.99',
+            'Cereal 4.50',
+            'Yogurt 2.00',
+            'Butter 3.50',
+            'Sugar 1.00',
+            'Salt 0.80',
+            'Pepper 1.20',
+            'Orange Juice 3.00',
+            'Apple 0.50',
+            'Banana 0.40',
+            'Grapes 2.00',
+            'Watermelon 4.00',
+            'Potato Chips 2.50',
+            'Chocolate Bar 1.50',
+            'Ice Cream 5.00',
+            'Cookies 3.00',
+            'Soda 1.00'
         ]
-        for path in paths:
-            if os.path.exists(path):
-                return path
-    elif os.path.exists("/usr/bin/tesseract"):  # Linux
-        return "/usr/bin/tesseract"
-    elif shutil.which("tesseract"):  # macOS/Linux Auto-Detection
-        return shutil.which("tesseract")
+        return random.choice(products)
     return None
 
+def mock_barcode_scan() -> str:
+    """Simulates a barcode scan and returns the barcode data."""
+    time.sleep(0.5)
+    return '123456789012'  # Example barcode data
 
-def preprocess_image_for_prices(img):
-    """
-    Preprocess the image specifically for recognizing prices with 'R' symbols.
-    """
-    # Convert to grayscale
-    img = img.convert("L")
-    
-    # Resize for consistency (optional)
-    img = img.resize((1280, 720))
-    
-    # Sharpen and enhance contrast/brightness
-    img = img.filter(ImageFilter.SHARPEN)
-    img = ImageEnhance.Contrast(img).enhance(3.0)  # Stronger contrast for better separation
-    img = ImageEnhance.Brightness(img).enhance(1.5)  # Brighten the image
-    
-    # Convert to OpenCV format
-    img_cv = np.array(img)
-    
-    # Apply Gaussian blur and adaptive thresholding
-    img_cv = cv2.GaussianBlur(img_cv, (5, 5), 0)
-    img_cv = cv2.adaptiveThreshold(img_cv, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
-    
-    # Morphological operations to clean up noise
-    kernel = np.ones((3, 3), np.uint8)
-    img_cv = cv2.morphologyEx(img_cv, cv2.MORPH_CLOSE, kernel)
-    
-    return Image.fromarray(img_cv)
+def mock_add_to_shopping_list(item: 'ShoppingItem') -> None:
+    """Simulates adding an item to the shopping list."""
+    time.sleep(0.3)
+    print('Adding to shopping list:', item)
 
+def mock_save_loyalty_card(card: 'LoyaltyCard') -> None:
+    """Simulates saving a loyalty card."""
+    time.sleep(0.3)
+    print('Saving loyalty card:', card)
 
-def extract_price_with_r(text):
-    """
-    Extract prices starting with 'R' using regex.
-    Handles formats like "R123.45", "R 123.45", "R1,234.56".
-    """
-    # Regex to match prices with 'R' prefix
-    price_match = re.search(r'R\s?([\d,]+(\.\d{1,2})?)', text)
-    if price_match:
-        price_str = price_match.group(1).replace(",", "")  # Remove commas
-        try:
-            return float(price_str)
-        except ValueError:
-            return None
-    return None
+def mock_get_product_info(barcode: str) -> Optional[dict]:
+    """Simulates fetching product info from a database or API."""
+    time.sleep(0.5)
+    if barcode == '123456789012':
+        return {'name': 'Generic Product', 'price': 9.99}
+    elif barcode == '987654321098':
+        return {'name': 'Brand Name Product', 'price': 19.99}
+    else:
+        return None  # Product not found
 
+@dataclass
+class ShoppingItem:
+    """Represents an item in the shopping list."""
+    id: str
+    name: str
+    price: float
+    quantity: int
+    purchased: bool
+    image_url: Optional[str] = None
 
-def crop_to_safe_area(image, safe_area_ratio=0.6):
-    """
-    Crop the image to a central "safe area" defined by a ratio of the original image size.
-    """
-    width, height = image.size
-    safe_width = int(width * safe_area_ratio)
-    safe_height = int(height * safe_area_ratio)
-    
-    left = (width - safe_width) // 2
-    top = (height - safe_height) // 2
-    right = left + safe_width
-    bottom = top + safe_height
-    
-    return image.crop((left, top, right, bottom))
+@dataclass
+class LoyaltyCard:
+    """Represents a loyalty card."""
+    id: str
+    name: str
+    number: str
+    barcode: Optional[str] = None
+    image: Optional[str] = None
 
+def main():
+    """Main function to run the Flashka app using Streamlit."""
+    st.title('Flashka - Price Scanner & Shopping List')
 
-# ============================
-# ✅ Initialize Session State
-# ============================
+    # Initialize session state
+    if 'camera_permission' not in st.session_state:
+        st.session_state.camera_permission = 'authorized'
+    if 'camera_type' not in st.session_state:
+        st.session_state.camera_type = 'back'
+    if 'is_scanning' not in st.session_state:
+        st.session_state.is_scanning = False
+    if 'shopping_list' not in st.session_state:
+        st.session_state.shopping_list = []
+    if 'loyalty_cards' not in st.session_state:
+        st.session_state.loyalty_cards = []
+    if 'is_add_manually_modal_visible' not in st.session_state:
+        st.session_state.is_add_manually_modal_visible = False
+    if 'new_item_name' not in st.session_state:
+        st.session_state.new_item_name = ''
+    if 'new_item_price' not in st.session_state:
+        st.session_state.new_item_price = ''
+    if 'new_card_name' not in st.session_state:
+        st.session_state.new_card_name = ''
+    if 'new_card_number' not in st.session_state:
+        st.session_state.new_card_number = ''
+    if 'is_add_card_manually_modal_visible' not in st.session_state:
+        st.session_state.is_add_card_manually_modal_visible = False
+    if 'scanned_item' not in st.session_state:
+        st.session_state.scanned_item = None
+    if 'is_add_confirmation_modal_visible' not in st.session_state:
+        st.session_state.is_add_confirmation_modal_visible = False
+    if 'is_scanning_barcode' not in st.session_state:
+        st.session_state.is_scanning_barcode = False
+    if 'is_barcode_mode' not in st.session_state:
+        st.session_state.is_barcode_mode = False
+    if 'scanned_barcode' not in st.session_state:
+        st.session_state.scanned_barcode = None
+    if 'is_fetching_product_info' not in st.session_state:
+        st.session_state.is_fetching_product_info = False
+    if 'is_edit_mode' not in st.session_state:
+        st.session_state.is_edit_mode = False
+    if 'editing_item' not in st.session_state:
+        st.session_state.editing_item = None
+    if 'is_add_card_modal_visible' not in st.session_state:
+        st.session_state.is_add_card_modal_visible = False
+    if 'selected_card_type' not in st.session_state:
+        st.session_state.selected_card_type = None
+    if 'show_settings' not in st.session_state:
+        st.session_state.show_settings = False
+    if 'ocr_engine' not in st.session_state:
+        st.session_state.ocr_engine = 'tesseract'
+    if 'image_quality' not in st.session_state:
+        st.session_state.image_quality = 'high'
+    if 'show_tutorial' not in st.session_state:
+        st.session_state.show_tutorial = True
+    if 'expanded_card_id' not in st.session_state:
+        st.session_state.expanded_card_id = None
 
-if 'total_price' not in st.session_state:
-    st.session_state.total_price = 0.0
-if 'scanned_items' not in st.session_state:
-    st.session_state.scanned_items = []
-if 'pending_price' not in st.session_state:
-    st.session_state.pending_price = None
-if 'pending_product' not in st.session_state:
-    st.session_state.pending_product = None
-
-# ============================
-# ✅ Main App Logic
-# ============================
-
-st.title("🛒 Price Scanner App")
-
-# 📢 Instruct users to use the back camera and position the label in the safe area
-st.warning("📢 **For best results:**")
-st.markdown("""
-- Use the BACK camera.
-- Position the price label within the **SAFE AREA** (centered rectangle).
-- Ensure good lighting and avoid shadows.
-""")
-
-# 📸 SCAN PRICE LABEL
-st.markdown("<h3 style='color: #007BFF;'>📷 Take a picture of the price label</h3>", unsafe_allow_html=True)
-img_file = st.camera_input("Use your **BACK camera** for better accuracy.")
-
-if img_file is not None:
-    try:
-        # Load the image
-        image = Image.open(img_file)
-
-        # Display the full image for debugging
-        st.subheader("🖼️ Full Captured Image")
-        st.image(image, caption="Full Captured Image", use_column_width=True)
-
-        # Crop the image to the safe area
-        safe_area_ratio = 0.6  # Safe area covers 60% of the image
-        cropped_image = crop_to_safe_area(image, safe_area_ratio)
-
-        # Display the cropped image
-        st.subheader("🖼️ Cropped Image (Safe Area)")
-        st.image(cropped_image, caption="Cropped Image (Safe Area)", use_column_width=True)
-
-        # Preprocess the cropped image for price recognition
-        preprocessed_image = preprocess_image_for_prices(cropped_image)
-
-        # Display the preprocessed image
-        st.subheader("🖼️ Preprocessed Image")
-        st.image(preprocessed_image, caption="Preprocessed Image", use_column_width=True)
-
-        # Extract text using Tesseract OCR (optimized for prices with 'R')
-        custom_config = "--psm 6 -c tessedit_char_whitelist=0123456789.Rr,"
-        recognized_text = pytesseract.image_to_string(preprocessed_image, config=custom_config)
-
-        st.subheader("📝 Recognized Text")
-        st.text(recognized_text)
-
-        if not recognized_text.strip():
-            st.warning("⚠️ No text detected. Please try again with better positioning or lighting.")
+    # --- Helper Functions ---
+    def add_item_to_shopping_list(item: ShoppingItem) -> None:
+        """Adds an item to the shopping list or updates quantity if it exists."""
+        existing_item_index = next(
+            (index for index, list_item in enumerate(st.session_state.shopping_list) if list_item.name == item.name), -1
+        )
+        if existing_item_index > -1:
+            updated_list = list(st.session_state.shopping_list)
+            updated_list[existing_item_index].quantity += item.quantity
+            st.session_state.shopping_list = updated_list
         else:
-            # Extract price with 'R' symbol
-            price = extract_price_with_r(recognized_text)
+            st.session_state.shopping_list.append(item)
+        mock_add_to_shopping_list(item)
 
-            if price is not None:
-                st.session_state.pending_price = price
-                st.success(f"✅ Detected price: R{price:.2f}")
+    def delete_item_from_shopping_list(item_id: str) -> None:
+        """Deletes an item from the shopping list."""
+        st.session_state.shopping_list = [
+            item for item in st.session_state.shopping_list if item.id != item_id
+        ]
+
+    def toggle_item_purchased(item_id: str) -> None:
+        """Toggles the purchased status of an item in the shopping list."""
+        st.session_state.shopping_list = [
+            item if item.id != item_id else ShoppingItem(
+                id=item.id,
+                name=item.name,
+                price=item.price,
+                quantity=item.quantity,
+                purchased=not item.purchased,
+                image_url=item.image_url
+            )
+            for item in st.session_state.shopping_list
+        ]
+
+    def add_loyalty_card(card: LoyaltyCard) -> None:
+        """Adds a loyalty card to the list."""
+        st.session_state.loyalty_cards.append(card)
+        mock_save_loyalty_card(card)
+
+    def delete_loyalty_card(card_id: str) -> None:
+        """Deletes a loyalty card from the list."""
+        st.session_state.loyalty_cards = [
+            card for card in st.session_state.loyalty_cards if card.id != card_id
+        ]
+        if st.session_state.expanded_card_id == card_id:
+            st.session_state.expanded_card_id = None
+
+    # --- UI Components ---
+    def render_shopping_list() -> None:
+        """Renders the shopping list."""
+        st.subheader('Shopping List')
+        total_price = sum(item.price * item.quantity for item in st.session_state.shopping_list)
+        st.write(f"Total Price: ${total_price:.2f}")
+
+        for item in st.session_state.shopping_list:
+            col1, col2, col3, col4 = st.columns([0.1, 0.6, 0.2, 0.1])
+            with col1:
+                if st.checkbox('', key=f"purchased-{item.id}", value=item.purchased):
+                    toggle_item_purchased(item.id)
+            with col2:
+                st.write(f"{item.name}  ${item.price:.2f} x {item.quantity}")
+            with col3:
+                if st.button("Edit", key=f"edit-{item.id}"):
+                    st.session_state.editing_item = item
+                    st.session_state.new_item_name = item.name
+                    st.session_state.new_item_price = str(item.price)
+                    st.session_state.is_edit_mode = True
+                    st.session_state.is_add_manually_modal_visible = True
+            with col4:
+                if st.button('Delete', key=f"delete-{item.id}"):
+                    delete_item_from_shopping_list(item.id)
+                    st.experimental_rerun()
+
+    def render_loyalty_cards() -> None:
+        """Renders the loyalty cards."""
+        st.subheader('Loyalty Cards')
+        for card in st.session_state.loyalty_cards:
+            with st.expander(card.name, expanded=(st.session_state.expanded_card_id == card.id)):
+                st.write(f"Number: {card.number}")
+                if card.barcode:
+                    st.write(f"Barcode: {card.barcode}")
+                if card.image:
+                    st.image(card.image, caption="Card Image", width=300)
+                if st.button("Delete Card", key=f"delete-card-{card.id}"):
+                    delete_loyalty_card(card.id)
+                    st.experimental_rerun()
+
+    # --- Event Handlers ---
+    def handle_scan_button_press() -> None:
+        """Handles the scan button press."""
+        st.session_state.is_scanning = True
+        st.session_state.is_barcode_mode = False
+        st.session_state.scanned_item = None
+        st.session_state.scanned_barcode = None
+
+        # Simulate OCR and handle result
+        image_path = 'mockImagePath1'
+        ocr_result = mock_ocr(image_path)
+        if ocr_result:
+            price_match = re.search(r'(\d+[,.]\d{2})', ocr_result)
+            if price_match:
+                price_str = price_match.group(1).replace(',', '.')
+                try:
+                    price = float(price_str)
+                    st.session_state.scanned_item = ShoppingItem(
+                        id=f'temp-{time.time()}',
+                        name='Scanned Item',
+                        price=price,
+                        quantity=1,
+                        purchased=False,
+                        image_url=None
+                    )
+                    st.session_state.is_add_confirmation_modal_visible = True
+                except ValueError:
+                    st.error("Invalid price format detected.")
             else:
-                st.warning("⚠️ No valid price detected. Please enter it manually.")
-    except Exception as e:
-        st.error(f"❌ An error occurred while processing the image: {e}")
+                st.error("No price found in scanned text.")
+        else:
+            st.error("Could not extract text. Please try again.")
+        st.session_state.is_scanning = False
 
-# 📌 CONFIRM OR EDIT PRICE & PRODUCT
-if st.session_state.pending_price is not None:
-    st.markdown("<h3 style='color: #007BFF;'>🔍 Review & Confirm Product & Price</h3>", unsafe_allow_html=True)
+    def handle_barcode_button_press() -> None:
+        """Handles the barcode button press."""
+        st.session_state.is_scanning = False
+        st.session_state.is_scanning_barcode = True
+        st.session_state.is_barcode_mode = True
+        st.session_state.scanned_item = None
+        st.session_state.scanned_barcode = None
 
-    product_name_input = st.text_input("Product Name:", value=st.session_state.pending_product)
-    corrected_price = st.number_input(
-        "Confirm or edit detected price:", min_value=0.00, format="%.2f", value=st.session_state.pending_price
-    )
+        # Simulate barcode scan and handle result
+        barcode_data = mock_barcode_scan()
+        st.session_state.scanned_barcode = barcode_data
 
-    if st.button("✅ Add to List"):
-        st.session_state.total_price += corrected_price
-        st.session_state.scanned_items.append(f"{product_name_input} - R{corrected_price:.2f}")
-        st.success(f"✅ Added: **{product_name_input}** for **R{corrected_price:.2f}**")
-        st.session_state.pending_price = None
-        st.session_state.pending_product = None
+        # Fetch product info
+        st.session_state.is_fetching_product_info = True
+        product_info = mock_get_product_info(barcode_data)
+        st.session_state.is_fetching_product_info = False
 
-# 🏷️ DISPLAY TOTAL PRICE
-st.markdown("<h3 style='color: #007BFF;'>🏷️ Total</h3>", unsafe_allow_html=True)
-st.markdown(f"<div class='total-box'>Total: R{st.session_state.total_price:.2f}</div>", unsafe_allow_html=True)
+        if product_info:
+            st.session_state.scanned_item = ShoppingItem(
+                id=f'barcode-{barcode_data}',
+                name=product_info['name'],
+                price=product_info['price'],
+                quantity=1,
+                purchased=False,
+                image_url=None
+            )
+            st.session_state.is_add_confirmation_modal_visible = True
+        else:
+            st.session_state.scanned_item = ShoppingItem(
+                id=f'barcode-{barcode_data}',
+                name='Product from Barcode',
+                price=0,
+                quantity=1,
+                purchased=False,
+                image_url=None
+            )
+            st.session_state.is_add_confirmation_modal_visible = True
+            st.warning("Product Not Found: Product information not found. You can add it to your list and edit the details.")
+        st.session_state.is_scanning_barcode = False
 
-# 📌 LIST OF SCANNED ITEMS
-if st.session_state.scanned_items:
-    st.markdown("<h3 style='color: #007BFF;'>🛍️ Scanned Items</h3>", unsafe_allow_html=True)
-    for item in st.session_state.scanned_items:
-        st.markdown(f"<div class='price-card'>✅ {item}</div>", unsafe_allow_html=True)
+    def handle_add_scanned_item_to_cart() -> None:
+        """Handles adding the scanned item to the shopping list."""
+        if st.session_state.scanned_item:
+            add_item_to_shopping_list(st.session_state.scanned_item)
+            st.session_state.scanned_item = None
+            st.session_state.is_add_confirmation_modal_visible = False
 
-# 🗑️ CLEAR ALL BUTTON
-if st.button("🗑️ Clear All"):
-    st.session_state.total_price = 0.0
-    st.session_state.scanned_items.clear()
-    st.session_state.pending_price = None
-    st.session_state.pending_product = None
-    st.success("✅ Cleared all scanned items and reset total price.")
+    def handle_add_manually() -> None:
+        """Handles adding an item manually."""
+        if not st.session_state.new_item_name.strip() or not st.session_state.new_item_price.strip():
+            st.error('Please enter both item name and price.')
+            return
+        try:
+            price = float(st.session_state.new_item_price.replace(',', '.'))
+        except ValueError:
+            st.error('Invalid price format. Please enter a valid number.')
+            return
+        if price <= 0:
+            st.error('Invalid price. Please enter a value greater than zero.')
+            return
 
-# ============================
-# ✅ Styling with CSS
-# ============================
+        new_item = ShoppingItem(
+            id=f'manual-{time.time()}',
+            name=st.session_state.new_item_name,
+            price=price,
+            quantity=1,
+            purchased=False,
+            image_url=None
+        )
+        add_item_to_shopping_list(new_item)
+        st.session_state.new_item_name = ''
+        st.session_state.new_item_price = ''
+        st.session_state.is_add_manually_modal_visible = False
 
-st.markdown("""
-<style>
-.total-box {
-    font-size: 24px;
-    font-weight: bold;
-    color: #007BFF;
-    padding: 10px;
-    border-radius: 5px;
-    background-color: #f0f8ff;
-    text-align: center;
-}
-.price-card {
-    font-size: 18px;
-    color: #333;
-    padding: 5px 10px;
-    margin: 5px 0;
-    border-left: 5px solid #007BFF;
-    background-color: #f9f9f9;
-}
-</style>
-""", unsafe_allow_html=True)
+    def handle_update_item() -> None:
+        """Handles updating an edited item."""
+        if not st.session_state.new_item_name.strip() or not st.session_state.new_item_price.strip():
+            st.error('Please enter both item name and price.')
+            return
+        try:
+            price = float(st.session_state.new_item_price.replace(',', '.'))
+        except ValueError:
+            st.error('Invalid price format. Please enter a valid number.')
+            return
+        if price <= 0:
+            st.error('Invalid price. Please enter a value greater than zero.')
+            return
+
+        if st.session_state.editing_item:
+            updated_list = [
+                item if item.id != st.session_state.editing_item.id else ShoppingItem(
+                    id=item.id,
+                    name=st.session_state.new_item_name,
+                    price=price,
+                    quantity=item.quantity,
+                    purchased=item.purchased,
+                    image_url=item.image_url
+                )
+                for item in st.session_state.shopping_list
+            ]
+            st.session_state.shopping_list = updated_list
+            st.session_state.editing_item = None
+        st.session_state.new_item_name = ''
+        st.session_state.new_item_price = ''
+        st.session_state.is_edit_mode = False
+        st.session_state.is_add_manually_modal_visible = False
+
+    def handle_add_card_manually() -> None:
+        """Handles adding a loyalty card manually."""
+        if not st.session_state.new_card_name.strip() or not st.session_state.new_card_number.strip():
+            st.error('Please enter both card name and number.')
+            return
+        new_card = LoyaltyCard(
+            id=f'manual-card-{time.time()}',
+            name=st.session_state.new_card_name,
+            number=st.session_state.new_card_number,
+            image=None
+        )
+        add_loyalty_card(new_card)
+        st.session_state.new_card_name = ''
+        st.session_state.new_card_number = ''
+        st.session_state.is_add_card_manually_modal_visible = False
+        st.session_state.is_add_card_modal_visible = False
+        st.session_state.selected_card_type = None
+
+    def handle_add_card(card_type: str) -> None:
+        """Handles the add card button click."""
+        st.session_state.selected_card_type = card_type
+        st.session_state.is_add_card_modal_visible = True
+        if card_type == 'manual':
+            st.session_state.is_add_card_manually_modal_visible = True
+
+    def handle_card_scan() -> None:
+        """Handles loyalty card scan."""
+        if st.session_state.camera_permission != 'authorized':
+            st.error('Camera Permission Required: Flashka needs access to your camera to scan cards. Please enable it in your device settings.')
+            return
+
+        st.session_state.is_scanning = True
+        st.session_state.is_barcode_mode = True
+        st.session_state.scanned_barcode = None
+        st.session_state.scanned_item = None
+
+        barcode_data = mock_barcode_scan()
+        st.session_state.scanned_barcode = barcode_data
+
+        new_card = LoyaltyCard(
+            id=f'card-{barcode_data}-{time.time()}',
+            name=f'Card from Scan {barcode_data}',
+            number=barcode_data,
+            barcode=barcode_data,
+            image=None
+        )
+
+        add_loyalty_card(new_card)
+        st.session_state.is_scanning = False
+        st.session_state.is_add_card_modal_visible = False
+        st.session_state.selected_card_type = None
+
+    def handle_close_tutorial() -> None:
+        """Handles closing the tutorial."""
+        st.session_state.show_tutorial = False
+
+    # --- Main UI ---
+    if st.session_state.show_tutorial:
+        with st.container():
+            st.title('Welcome to Flashka!')
+            st.write('Flashka helps you scan prices, manage your shopping list, and store loyalty cards.')
+            st.subheader("Tutorial")
+            st.write("1. **Scan Prices:** Use the 'Scan Price' button and point your camera at the price.")
+            st.write("2. **View Shopping List:** View the items, their prices, and mark them as purchased.")
+            st.write("3. **Manage Loyalty Cards:** Store your loyalty cards by scanning or entering details manually.")
+            if st.button("Close Tutorial"):
+                handle_close_tutorial()
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.subheader('Shopping')
+        if st.button('Scan Price'):
+            handle_scan_button_press()
+        if st.button('Add Manually'):
+            st.session_state.is_add_manually_modal_visible = True
+        if st.button('Scan Barcode'):
+            handle_barcode_button_press()
+        render_shopping_list()
+
+    with col2:
+        st.subheader('Cards')
+        if st.button('Add Card'):
+            handle_add_card('manual')
+        render_loyalty_cards()
+
+    # --- Modals ---
+    if st.session_state.is_add_manually_modal_visible:
+        with st.form("add_item_form"):
+            st.subheader("Edit Item" if st.session_state.is_edit_mode else "Add New Item")
+            st.session_state.new_item_name = st.text_input('Item Name', value=st.session_state.new_item_name)
+            st.session_state.new_item_price = st.text_input('Price', value=st.session_state.new_item_price)
+            if st.session_state.is_edit_mode:
+                if st.form_submit_button("Update"):
+                    handle_update_item()
+            else:
+                if st.form_submit_button('Add'):
+                    handle_add_manually()
+        if st.button("Cancel"):
+            st.session_state.is_add_manually_modal_visible = False
+            st.session_state.is_edit_mode = False
+            st.session_state.new_item_name = ''
+            st.session_state.new_item_price = ''
+
+    if st.session_state.is_add_confirmation_modal_visible:
+        with st.container():
+            st.subheader('Confirm Item')
+            if st.session_state.scanned_item:
+                st.write(f"Name: {st.session_state.scanned_item.name}")
+                st.write(f"Price: ${st.session_state.scanned_item.price:.2f}")
+                st.write(f"Quantity: {st.session_state.scanned_item.quantity}")
+                if st.button("Confirm", key="confirm_scanned_item"):
+                    handle_add_scanned_item_to_cart()
+                if st.button("Cancel", key="cancel_scanned_item"):
+                    st.session_state.scanned_item = None
+                    st.session_state.is_add_confirmation_modal_visible = False
+
+if __name__ == '__main__':
+    main()
