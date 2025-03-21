@@ -1,5 +1,6 @@
-streamlit>=1.0.0
-pytesseract
-Pillow
-pyzbar
-requests
+streamlit==1.30.0
+pytesseract==0.3.10
+opencv-python==4.9.0.80
+pyzbar==0.1.10
+pillow==10.3.0
+requests==2.31.0
