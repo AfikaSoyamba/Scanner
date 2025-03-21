@@ -4,3 +4,4 @@ opencv-python==4.9.0.80
 pyzbar==0.1.10
 pillow==10.3.0
 requests==2.31.0
+numpy==1.26.4
