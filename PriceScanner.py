@@ -12,17 +12,22 @@ from typing import Optional
 import numpy as np
 import cv2
 
-# Database initialization
+# Database initialization with error handling
 def init_db():
-    conn = sqlite3.connect('flashka.db')
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS shopping_list
-                 (id TEXT PRIMARY KEY, name TEXT, price REAL, quantity INTEGER, purchased INTEGER, image_url TEXT)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS loyalty_cards
-                 (id TEXT PRIMARY KEY, name TEXT, number TEXT, barcode TEXT, image BLOB)''')
-    conn.commit()
-    conn.close()
-init_db()
+    try:
+        conn = sqlite3.connect('flashka.db', check_same_thread=False)
+        c = conn.cursor()
+        c.execute('''CREATE TABLE IF NOT EXISTS shopping_list
+                     (id TEXT PRIMARY KEY, name TEXT, price REAL, quantity INTEGER, purchased INTEGER, image_url TEXT)''')
+        c.execute('''CREATE TABLE IF NOT EXISTS loyalty_cards
+                     (id TEXT PRIMARY KEY, name TEXT, number TEXT, barcode TEXT, image BLOB)''')
+        conn.commit()
+        return conn
+    except sqlite3.Error as e:
+        st.error(f"Database error: {e}")
+        return None
+
+conn = init_db()
 
 # Security functions
 def hash_data(data):
@@ -48,21 +53,29 @@ class LoyaltyCard:
 
 # Enhanced OCR with preprocessing
 def perform_ocr(image_file) -> str:
-    img = Image.open(image_file)
-    img = np.array(img)
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
-    text = pytesseract.image_to_string(thresh)
-    return text
+    try:
+        img = Image.open(image_file)
+        img = np.array(img)
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+        text = pytesseract.image_to_string(thresh)
+        return text
+    except Exception as e:
+        st.error(f"OCR Error: {str(e)}")
+        return ""
 
 # Improved barcode scanning
 def scan_barcode_from_image(image_file) -> Optional[str]:
-    img = Image.open(image_file)
-    img = img.convert('RGB')
-    decoded_objects = decode(img)
-    if decoded_objects:
-        return decoded_objects[0].data.decode("utf-8")
-    return None
+    try:
+        img = Image.open(image_file)
+        img = img.convert('RGB')
+        decoded_objects = decode(img)
+        if decoded_objects:
+            return decoded_objects[0].data.decode("utf-8")
+        return None
+    except Exception as e:
+        st.error(f"Barcode Error: {str(e)}")
+        return None
 
 # Product info lookup with error handling
 def get_product_info(barcode: str) -> Optional[dict]:
@@ -83,29 +96,33 @@ def get_product_info(barcode: str) -> Optional[dict]:
         st.error(f"Data Parsing Error: {str(e)}")
     return None
 
-# Database operations
+# Database operations with error handling
 def load_data():
-    conn = sqlite3.connect('flashka.db')
-    shopping_list = [ShoppingItem(*row) for row in conn.execute('SELECT * FROM shopping_list')]
-    loyalty_cards = [LoyaltyCard(*row) for row in conn.execute('SELECT * FROM loyalty_cards')]
-    conn.close()
-    return shopping_list, loyalty_cards
+    try:
+        shopping_list = [ShoppingItem(*row) for row in conn.execute('SELECT * FROM shopping_list')]
+        loyalty_cards = [LoyaltyCard(*row) for row in conn.execute('SELECT * FROM loyalty_cards')]
+        return shopping_list, loyalty_cards
+    except sqlite3.Error as e:
+        st.error(f"Database load error: {e}")
+        return [], []
 
 def save_shopping_list(items):
-    conn = sqlite3.connect('flashka.db')
-    conn.execute('DELETE FROM shopping_list')
-    conn.executemany('INSERT INTO shopping_list VALUES (?, ?, ?, ?, ?, ?)', 
-                    [(i.id, i.name, i.price, i.quantity, i.purchased, i.image_url) for i in items])
-    conn.commit()
-    conn.close()
+    try:
+        conn.execute('DELETE FROM shopping_list')
+        conn.executemany('INSERT INTO shopping_list VALUES (?, ?, ?, ?, ?, ?)', 
+                        [(i.id, i.name, i.price, i.quantity, i.purchased, i.image_url) for i in items])
+        conn.commit()
+    except sqlite3.Error as e:
+        st.error(f"Database save error: {e}")
 
 def save_loyalty_cards(cards):
-    conn = sqlite3.connect('flashka.db')
-    conn.execute('DELETE FROM loyalty_cards')
-    conn.executemany('INSERT INTO loyalty_cards VALUES (?, ?, ?, ?, ?)', 
-                    [(c.id, c.name, hash_data(c.number), c.barcode, c.image) for c in cards])
-    conn.commit()
-    conn.close()
+    try:
+        conn.execute('DELETE FROM loyalty_cards')
+        conn.executemany('INSERT INTO loyalty_cards VALUES (?, ?, ?, ?, ?)', 
+                        [(c.id, c.name, hash_data(c.number), c.barcode, c.image) for c in cards])
+        conn.commit()
+    except sqlite3.Error as e:
+        st.error(f"Database save error: {e}")
 
 # Main app
 def main():
@@ -113,7 +130,7 @@ def main():
     st.title("Flashka - Smart Shopping Assistant")
 
     # Load data from database
-    if 'shopping_list' not in st.session_state:
+    if 'shopping_list' not in st.session_state or 'loyalty_cards' not in st.session_state:
         st.session_state.shopping_list, st.session_state.loyalty_cards = load_data()
 
     # Initialize session state variables
